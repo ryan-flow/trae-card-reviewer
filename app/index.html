@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0F0F1A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TRAE审阅">
+<meta name="format-detection" content="telephone=no">
+<title>TRAE 评委卡片审阅</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+  
+  :root {
+    /* Linear-inspired palette: zinc-tinted darks + indigo accents */
+    --bg: #0F0F1A;              /* page base - indigo-black, not pure black */
+    --bg-elevated: #1B1B2E;     /* sidebar/raised */
+    --surface: #1B1B2E;         /* cards */
+    --surface-2: #27272A;       /* elevated elements (zinc) */
+    --surface-3: #3F3F46;       /* borders-strong / hover */
+    --border: #2E2E4A;          /* hairline border */
+    --border-subtle: rgba(94, 106, 210, 0.12);  /* glass border */
+    --accent: #5E6AD2;          /* Linear Purple - primary CTA */
+    --accent-light: #818CF8;    /* Linear Violet - hover/secondary */
+    --accent-glow: rgba(94, 106, 210, 0.4);
+    --text: #F1F1F4;            /* near-white, AA 16.9:1 */
+    --text-dim: #9B9BAD;        /* secondary text */
+    --text-mute: #6B6B80;       /* muted/labels */
+    --green: #4ADE80;           /* like - pastel mint */
+    --red: #F87171;             /* dislike - coral */
+    --orange: #FBBF24;          /* flag/score - amber */
+    --pink: #EC4899;            /* tag accent */
+    --cyan: #38BDF8;            /* tag accent */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    /* Glassmorphism helpers */
+    --glass-bg: rgba(15, 15, 26, 0.72);
+    --glass-blur: blur(20px) saturate(180%);
+    --glass-border: rgba(255, 255, 255, 0.06);
+  }
+  
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.005em;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    height: 100vh;
+  }
+  
+  /* ===== 顶部状态栏 - Glassmorphism ===== */
+  .header {
+    flex-shrink: 0;
+    padding: calc(var(--safe-top) + 8px) 16px 8px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--border-subtle);
+    z-index: 20;
+    position: relative;
+  }
+  .progress-track {
+    height: 2px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 1px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
+    border-radius: 1px;
+    transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    width: 0;
+    box-shadow: 0 0 8px var(--accent-glow);
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 28px;
+  }
+  .counter {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .counter b { color: var(--text); font-weight: 600; }
+  
+  .header-actions { display: flex; gap: 6px; align-items: center; }
+  .pill {
+    background: var(--surface-2);
+    color: var(--text);
+    border: none;
+    padding: 5px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path fill='%238e8e93' d='M2 3l3 3 3-3'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 22px;
+  }
+  .stats {
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .stats .like-c { color: var(--green); }
+  .stats .dislike-c { color: var(--red); }
+  
+  /* ===== 卡片区 - Glassmorphism + Stacked Depth ===== */
+  .card-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    padding: 12px;
+    perspective: 1500px;
+  }
+  
+  .card {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    background: var(--surface);
+    border-radius: 20px;
+    overflow: hidden;
+    /* Glass effect: subtle border + inner glow + layered shadows */
+    border: 1px solid var(--border-subtle);
+    box-shadow:
+      0 8px 32px rgba(0,0,0,0.5),
+      0 0 0 1px rgba(94, 106, 210, 0.04) inset,
+      0 1px 0 rgba(255,255,255,0.05) inset;
+    will-change: transform;
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s;
+    display: flex;
+    flex-direction: column;
+  }
+  .card.dragging { transition: none; }
+  /* Stacked depth: 3-tier card stack illusion */
+  .card.behind {
+    transform: scale(0.94) translateY(-8px);
+    opacity: 0.5;
+  }
+  .card.behind-2 {
+    transform: scale(0.88) translateY(-16px);
+    opacity: 0.25;
+  }
+  .card.exit-left { transform: translateX(-130vw) rotate(-25deg); opacity: 0; }
+  .card.exit-right { transform: translateX(130vw) rotate(25deg); opacity: 0; }
+  .card.exit-up { transform: translateY(-130vh); opacity: 0; }
+  .card.exit-down { transform: translateY(130vh); opacity: 0; }
+  
+  /* 卡片正面：图 + 信息 */
+  .card-cover {
+    width: 100%;
+    height: 38vh;
+    max-height: 320px;
+    min-height: 180px;
+    object-fit: cover;
+    background: var(--surface-2);
+    flex-shrink: 0;
+  }
+  .card-cover-ph {
+    width: 100%;
+    height: 38vh;
+    max-height: 320px;
+    min-height: 180px;
+    background: linear-gradient(135deg, #5E6AD2 0%, #818CF8 50%, #1B1B2E 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 56px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .card-cover-ph::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(15,15,26,0.6), transparent 60%);
+  }
+  
+  .card-info {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 18px 20px;
+    overscroll-behavior: contain;
+  }
+  
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .tag {
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    background: rgba(255,255,255,0.04);
+    color: var(--text-dim);
+    border: 1px solid var(--border-subtle);
+  }
+  .tag-life { background: rgba(236, 72, 153, 0.12); color: #F472B6; border-color: rgba(236, 72, 153, 0.2); }
+  .tag-study { background: rgba(94, 106, 210, 0.15); color: var(--accent-light); border-color: rgba(94, 106, 210, 0.25); }
+  .tag-society { background: rgba(56, 189, 248, 0.12); color: var(--cyan); border-color: rgba(56, 189, 248, 0.2); }
+  .tag-hardware { background: rgba(251, 191, 36, 0.12); color: var(--orange); border-color: rgba(251, 191, 36, 0.2); }
+  .tag-public { background: rgba(74, 222, 128, 0.12); color: var(--green); border-color: rgba(74, 222, 128, 0.2); }
+  
+  .title {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--text);
+    margin-bottom: 12px;
+    letter-spacing: -0.2px;
+  }
+  
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 0.5px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+  .meta-row span { display: flex; align-items: center; gap: 3px; }
+  
+  .excerpt {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text-dim);
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .swipe-hint {
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, rgba(94, 106, 210, 0.1), rgba(129, 140, 248, 0.05));
+    border: 1px solid rgba(94, 106, 210, 0.12);
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.6;
+  }
+  .swipe-hint b { color: var(--accent-light); }
+  
+  /* 卡片详情（全屏覆盖式） */
+  .card-detail {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  .card-detail.show { transform: translateY(0); }
+  
+  .detail-header {
+    flex-shrink: 0;
+    padding: calc(var(--safe-top) + 10px) 16px 10px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 2;
+  }
+  .back-btn {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-subtle);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .detail-title {
+    font-size: 14px;
+    font-weight: 600;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+  }
+  
+  .detail-body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 20px 18px calc(40px + var(--safe-bottom));
+    font-size: 15px;
+    line-height: 1.75;
+    color: var(--text);
+  }
+  .detail-body p { margin-bottom: 14px; }
+  .detail-body h1, .detail-body h2, .detail-body h3, .detail-body h4 {
+    margin: 22px 0 10px;
+    color: var(--text);
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  .detail-body h1 { font-size: 22px; }
+  .detail-body h2 { font-size: 19px; }
+  .detail-body h3 { font-size: 17px; }
+  .detail-body h4 { font-size: 15px; color: var(--accent-light); }
+  .detail-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    margin: 12px 0;
+    display: block;
+  }
+  .detail-body blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 8px 14px;
+    margin: 14px 0;
+    background: var(--surface-2);
+    border-radius: 0 8px 8px 0;
+    color: var(--text-dim);
+  }
+  .detail-body a { color: var(--accent-light); word-break: break-all; }
+  .detail-body code {
+    background: var(--surface-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: "SF Mono", Menlo, monospace;
+  }
+  .detail-body pre {
+    background: var(--surface-2);
+    padding: 14px;
+    border-radius: 10px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .detail-body pre code { background: none; padding: 0; }
+  .detail-body hr { border: none; border-top: 0.5px solid var(--border); margin: 20px 0; }
+  .detail-body ul, .detail-body ol { padding-left: 24px; margin-bottom: 14px; }
+  .detail-body li { margin-bottom: 4px; }
+  .detail-body table {
+    border-collapse: collapse;
+    margin: 14px 0;
+    width: 100%;
+    font-size: 13px;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .detail-body th, .detail-body td {
+    border: 0.5px solid var(--border);
+    padding: 8px 10px;
+    text-align: left;
+  }
+  .detail-body th { background: var(--surface-2); font-weight: 600; }
+  .detail-body strong, .detail-body b { color: var(--text); font-weight: 700; }
+  .detail-loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--text-dim);
+  }
+  .detail-loading::before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--surface-3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* 决策印章 */
+  .stamp {
+    position: absolute;
+    top: 60px;
+    font-size: 28px;
+    font-weight: 900;
+    padding: 6px 18px;
+    border: 3px solid;
+    border-radius: 10px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 5;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-family: -apple-system, sans-serif;
+  }
+  .stamp.like {
+    right: 24px;
+    color: var(--green);
+    border-color: var(--green);
+    transform: rotate(15deg);
+    text-shadow: 0 0 12px rgba(74, 222, 128, 0.6);
+  }
+  .stamp.dislike {
+    left: 24px;
+    color: var(--red);
+    border-color: var(--red);
+    transform: rotate(-15deg);
+    text-shadow: 0 0 12px rgba(248, 113, 113, 0.6);
+  }
+  .card.show-like .stamp.like { opacity: 1; }
+  .card.show-dislike .stamp.dislike { opacity: 1; }
+  
+  /* ===== 底部操作栏 - Glassmorphism ===== */
+  .footer {
+    flex-shrink: 0;
+    padding: 12px 16px calc(12px + var(--safe-bottom));
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    z-index: 20;
+  }
+  
+  .btn {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-subtle);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+    padding: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.04) inset;
+  }
+  .btn:active { transform: scale(0.88); }
+  .btn svg { width: 60%; height: 60%; }
+  
+  .btn-lg { width: 60px; height: 60px; }
+  .btn-md { width: 48px; height: 48px; }
+  
+  .btn-dislike { background: var(--surface-2); color: var(--red); }
+  .btn-dislike:active { background: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.3); }
+  .btn-like { background: var(--surface-2); color: var(--green); }
+  .btn-like:active { background: rgba(74, 222, 128, 0.15); box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.3); }
+  .btn-skip { background: var(--surface-2); color: var(--text-dim); }
+  .btn-detail { background: var(--surface-2); color: var(--accent-light); }
+  .btn-detail:active { background: rgba(94, 106, 210, 0.15); box-shadow: 0 0 0 2px var(--accent-glow); }
+  .btn-flag { background: var(--surface-2); color: var(--orange); }
+  .btn-flag.active {
+    background: rgba(251, 191, 36, 0.15);
+    color: var(--orange);
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.4), 0 2px 8px rgba(0,0,0,0.3);
+    border-color: rgba(251, 191, 36, 0.4);
+  }
+  
+  /* 空状态 */
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    gap: 16px;
+    padding: 32px;
+    text-align: center;
+  }
+  .empty h2 { font-size: 22px; color: var(--text); font-weight: 700; }
+  .empty .emoji { font-size: 64px; }
+  .empty button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px var(--accent-glow);
+  }
+  .empty button.secondary {
+    background: var(--surface-2);
+    margin-top: 8px;
+  }
+  
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: calc(120px + var(--safe-bottom));
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(27, 27, 46, 0.92);
+    color: var(--text);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.25s;
+    z-index: 100;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    white-space: nowrap;
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  
+  /* 评分浮层 */
+  .score-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 15, 26, 0.7);
+    z-index: 200;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: var(--safe-bottom);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+  }
+  .score-overlay.show { display: flex; }
+  .score-sheet {
+    background: var(--surface);
+    width: 100%;
+    max-width: 500px;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px calc(20px + var(--safe-bottom));
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    border-top: 1px solid var(--border-subtle);
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.4);
+  }
+  .score-overlay.show .score-sheet { transform: translateY(0); }
+  .score-sheet h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+  .score-sheet .sub {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 18px;
+  }
+  .score-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .score-cell {
+    aspect-ratio: 1;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-variant-numeric: tabular-nums;
+  }
+  .score-cell:active { transform: scale(0.92); }
+  .score-cell.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .score-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .score-actions button {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .score-actions .cancel {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .score-actions .save {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 4px 12px var(--accent-glow);
+  }
+  
+  /* 桌面端居中手机比例 */
+  @media (min-width: 600px) {
+    body {
+      max-width: 430px;
+      margin: 0 auto;
+      box-shadow: 0 0 40px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, #1B1B2E 0%, #0F0F1A 70%, #08080F 100%);
+      z-index: -1;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="header-row">
+    <div class="counter">已审 <b id="doneCount">0</b>/<b id="totalCount">0</b></div>
+    <div class="header-actions">
+      <select class="pill" id="filterTag">
+        <option value="">全部赛道</option>
+        <option value="生活娱乐">生活娱乐</option>
+        <option value="学习工作">学习工作</option>
+        <option value="社会服务">社会服务</option>
+        <option value="硬件交互">硬件交互</option>
+        <option value="社会公益">社会公益</option>
+      </select>
+      <select class="pill" id="sortBy">
+        <option value="votes">按投票</option>
+        <option value="views">按浏览</option>
+        <option value="created">按时间</option>
+        <option value="id">按ID</option>
+      </select>
+      <div class="stats">
+        <span class="like-c">♥<b id="likeCount">0</b></span>
+        <span class="dislike-c">✗<b id="dislikeCount">0</b></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card-area" id="cardArea">
+  <div class="empty" id="emptyState">
+    <div class="emoji">⏳</div>
+    <h2>加载中</h2>
+    <p>正在拉取帖子数据</p>
+  </div>
+</div>
+
+<div class="footer">
+  <button class="btn btn-md btn-dislike" onclick="actions.dislike()" aria-label="不喜欢">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <button class="btn btn-md btn-skip" onclick="actions.skip()" aria-label="跳过">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  </button>
+  <button class="btn btn-md btn-detail" onclick="actions.toggleDetail()" aria-label="详情">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+  </button>
+  <button class="btn btn-md btn-flag" id="flagBtn" onclick="actions.flag()" aria-label="标记">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+  </button>
+  <button class="btn btn-md btn-like" onclick="actions.like()" aria-label="喜欢">
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+  </button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 评分浮层 -->
+<div class="score-overlay" id="scoreOverlay" onclick="if(event.target===this)actions.closeScore()">
+  <div class="score-sheet">
+    <h3>评分</h3>
+    <div class="sub">点击数字设置分数（0-10）</div>
+    <div class="score-grid" id="scoreGrid"></div>
+    <div class="score-actions">
+      <button class="cancel" onclick="actions.closeScore()">取消</button>
+      <button class="save" onclick="actions.saveScore()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const state = {
+  topics: [], filtered: [], cursor: 0,
+  scores: {}, detailCache: {},
+  isDetail: false, isAnimating: false,
+  cardEl: null, behindEl: null,
+  pendingScore: null,
+};
+
+const TAG_CLASS = {
+  '生活娱乐': 'tag-life', '学习工作': 'tag-study',
+  '社会服务': 'tag-society', '硬件交互': 'tag-hardware', '社会公益': 'tag-public'
+};
+
+// === 持久化 ===
+function loadScores() {
+  try {
+    const s = localStorage.getItem('trae_scores');
+    if (s) state.scores = JSON.parse(s);
+  } catch(e) {}
+}
+function saveScores() {
+  localStorage.setItem('trae_scores', JSON.stringify(state.scores));
+  updateCounter();
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+// === 数据加载 ===
+async function loadTopics() {
+  const r = await fetch('data/topics.json');
+  const data = await r.json();
+  state.topics = Array.isArray(data) ? data : [data];
+  applyFilter();
+}
+
+function applyFilter() {
+  const tag = document.getElementById('filterTag').value;
+  const sortBy = document.getElementById('sortBy').value;
+  state.filtered = state.topics.filter(t => {
+    if (!tag) return true;
+    return (t.tags || '').split(',').map(s => s.trim()).includes(tag);
+  });
+  const sorters = {
+    votes: (a,b) => b.votes - a.votes,
+    views: (a,b) => b.views - a.views,
+    created: (a,b) => (b.created||'').localeCompare(a.created||''),
+    id: (a,b) => b.id - a.id
+  };
+  state.filtered.sort(sorters[sortBy] || sorters.votes);
+  state.cursor = state.filtered.findIndex(t => !state.scores[t.id]?.decision);
+  if (state.cursor < 0) state.cursor = 0;
+  renderCard();
+}
+
+async function loadDetail(id) {
+  if (state.detailCache[id]) return state.detailCache[id];
+  try {
+    const r = await fetch('data/posts/' + id + '.json');
+    const d = await r.json();
+    // 优先 cooked_remote（远程 CDN URL，部署友好），回退 cooked（旧数据本地路径改写）
+    d.html = d.cooked_remote || (d.cooked || '').replace(/src="(\.\.\/)?images\//g, 'src="data/images/');
+    state.detailCache[id] = d;
+    return d;
+  } catch(e) {
+    return { html: '<p style="color:#ff3b30">详情加载失败：' + e.message + '</p>' };
+  }
+}
+
+// === 渲染 ===
+function renderCard() {
+  const area = document.getElementById('cardArea');
+  
+  while (state.cursor < state.filtered.length && state.scores[state.filtered[state.cursor].id]?.decision) {
+    state.cursor++;
+  }
+  
+  if (state.cursor >= state.filtered.length) {
+    const totalDone = state.filtered.length;
+    const allDone = state.topics.length === state.filtered.length;
+    area.innerHTML = `
+      <div class="empty">
+        <div class="emoji">🎉</div>
+        <h2>全部审阅完成</h2>
+        <p>本组共 ${totalDone} 条已处理</p>
+        ${allDone ? '' : `<button class="secondary" onclick="document.getElementById('filterTag').value='';applyFilter()">查看全部赛道</button>`}
+        <button onclick="exportScores()">导出评分 CSV</button>
+        <button class="secondary" onclick="resetScores()">重置全部评分</button>
+      </div>`;
+    updateCounter();
+    return;
+  }
+  
+  const t = state.filtered[state.cursor];
+  const next = state.filtered[state.cursor + 1];
+  const next2 = state.filtered[state.cursor + 2];
+  const score = state.scores[t.id] || {};
+  
+  area.innerHTML = `
+    <div class="card behind-2" id="behind2Card">
+      ${next2 ? renderFront(next2, true) : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);opacity:0.4">已到末尾</div>'}
+    </div>
+    <div class="card behind" id="behindCard">
+      ${next ? renderFront(next, true) : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim)">已到末尾</div>'}
+    </div>
+    <div class="card" id="mainCard">
+      <div class="stamp like">LIKE</div>
+      <div class="stamp dislike">NOPE</div>
+      ${renderFront(t, false)}
+      <div class="card-detail" id="cardDetail">
+        <div class="detail-header">
+          <button class="back-btn" onclick="actions.toggleDetail()" aria-label="返回">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div class="detail-title">${escapeHtml(t.title || '')}</div>
+        </div>
+        <div class="detail-body" id="detailBody">
+          <div class="detail-loading">加载中...</div>
+        </div>
+      </div>
+    </div>`;
+  
+  state.cardEl = document.getElementById('mainCard');
+  state.behindEl = document.getElementById('behindCard');
+  state.isDetail = false;
+  
+  const flagBtn = document.getElementById('flagBtn');
+  if (flagBtn) flagBtn.classList.toggle('active', !!score.flagged);
+  
+  attachDrag(state.cardEl);
+  updateCounter();
+}
+
+function renderFront(t, isBehind) {
+  const tagsHtml = (t.tags || '').split(',').filter(Boolean).map(tag =>
+    `<span class="tag ${TAG_CLASS[tag.trim()]||''}">${tag.trim()}</span>`).join('');
+  const excerpt = stripHtml(t.excerpt || '').slice(0, 200);
+  const cover = t.image_url
+    ? `<img class="card-cover" src="${t.image_url}" onerror="this.outerHTML='<div class=\\'card-cover-ph\\'>📝</div>'">`
+    : `<div class="card-cover-ph">📝</div>`;
+  
+  return `
+    ${isBehind ? '' : cover}
+    <div class="card-info">
+      <div class="tags">${tagsHtml}</div>
+      <div class="title">${escapeHtml(t.title || '')}</div>
+      <div class="meta-row">
+        <span>👍 ${t.votes || 0}</span>
+        <span>👁 ${t.views || 0}</span>
+        <span>💬 ${t.replies || 0}</span>
+        <span>📅 ${(t.created||'').slice(0,10)}</span>
+      </div>
+      <div class="excerpt">${escapeHtml(excerpt)}</div>
+      ${isBehind ? '' : `
+      <div class="swipe-hint">
+        <b>↑ 上滑</b>看完整正文 &nbsp;·&nbsp; <b>← →</b> 喜欢/不喜欢<br>
+        <span style="opacity:0.7">键盘：← ✗ / → ♥ / ↑ 详情 / Space 跳过 / S 评分</span>
+      </div>`}
+    </div>`;
+}
+
+function updateCounter() {
+  const done = state.filtered.filter(t => state.scores[t.id]?.decision).length;
+  const likes = Object.values(state.scores).filter(s => s.decision === 'like').length;
+  const dislikes = Object.values(state.scores).filter(s => s.decision === 'dislike').length;
+  document.getElementById('doneCount').textContent = done;
+  document.getElementById('totalCount').textContent = state.filtered.length;
+  document.getElementById('likeCount').textContent = likes;
+  document.getElementById('dislikeCount').textContent = dislikes;
+  const pct = state.filtered.length ? (done / state.filtered.length * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// === 拖拽 ===
+function attachDrag(el) {
+  let startX = 0, startY = 0;
+  let lastX = 0, lastY = 0;
+  let dragging = false;
+  let isVertical = null;
+  
+  const start = (x, y) => {
+    if (state.isAnimating) return;
+    dragging = true;
+    isVertical = null;
+    startX = lastX = x;
+    startY = lastY = y;
+    el.classList.add('dragging');
+  };
+  const move = (x, y) => {
+    if (!dragging) return;
+    lastX = x; lastY = y;
+    const dx = x - startX, dy = y - startY;
+    if (isVertical === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      isVertical = Math.abs(dy) > Math.abs(dx);
+    }
+    if (isVertical === false) {
+      const rot = Math.max(-15, Math.min(15, dx / 12));
+      el.style.transform = `translateX(${dx}px) rotate(${rot}deg)`;
+      el.classList.toggle('show-like', dx > 80);
+      el.classList.toggle('show-dislike', dx < -80);
+    } else if (isVertical === true) {
+      if (!state.isDetail && dy < 0) {
+        el.style.transform = `translateY(${dy}px)`;
+      } else if (state.isDetail && dy > 0) {
+        const detail = document.getElementById('cardDetail');
+        if (detail) detail.style.transform = `translateY(${dy}px)`;
+      }
+    }
+  };
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    el.classList.remove('dragging', 'show-like', 'show-dislike');
+    const finalDx = lastX - startX;
+    const finalDy = lastY - startY;
+    
+    if (isVertical === false) {
+      if (finalDx > 80) actions.like();
+      else if (finalDx < -80) actions.dislike();
+      else el.style.transform = '';
+    } else if (isVertical === true) {
+      const detail = document.getElementById('cardDetail');
+      if (state.isDetail && detail && finalDy > 100) {
+        actions.toggleDetail();
+      } else if (!state.isDetail && finalDy < -80) {
+        actions.toggleDetail();
+      } else {
+        el.style.transform = '';
+        if (detail) detail.style.transform = '';
+      }
+    } else {
+      el.style.transform = '';
+    }
+  };
+  
+  // 鼠标
+  el.onmousedown = e => { start(e.clientX, e.clientY); e.preventDefault(); };
+  window.onmousemove = e => move(e.clientX, e.clientY);
+  window.onmouseup = end;
+  // 触摸
+  const ts = e => { const t = e.touches[0]; start(t.clientX, t.clientY); };
+  const tm = e => {
+    if (!dragging) return;
+    const t = e.touches[0];
+    move(t.clientX, t.clientY);
+    if (isVertical === false) e.preventDefault();
+  };
+  const te = () => end();
+  el.addEventListener('touchstart', ts, { passive: true });
+  el.addEventListener('touchmove', tm, { passive: false });
+  el.addEventListener('touchend', te, { passive: true });
+  el.addEventListener('touchcancel', te, { passive: true });
+}
+
+// === Actions ===
+const actions = {
+  like() {
+    if (state.isAnimating || !state.cardEl) return;
+    const t = state.filtered[state.cursor];
+    if (!t) return;
+    state.scores[t.id] = { ...(state.scores[t.id]||{}), decision: 'like', at: Date.now() };
+    saveScores();
+    animateExit('right');
+  },
+  dislike() {
+    if (state.isAnimating || !state.cardEl) return;
+    const t = state.filtered[state.cursor];
+    if (!t) return;
+    state.scores[t.id] = { ...(state.scores[t.id]||{}), decision: 'dislike', at: Date.now() };
+    saveScores();
+    animateExit('left');
+  },
+  skip() {
+    if (state.isAnimating || !state.cardEl) return;
+    animateExit('down');
+  },
+  async toggleDetail() {
+    if (state.isAnimating || !state.cardEl) return;
+    const t = state.filtered[state.cursor];
+    if (!t) return;
+    const detail = document.getElementById('cardDetail');
+    if (!detail) return;
+    
+    state.isDetail = !state.isDetail;
+    if (state.isDetail) {
+      detail.style.transform = 'translateY(0)';
+      detail.classList.add('show');
+      const body = document.getElementById('detailBody');
+      if (!state.detailCache[t.id]) {
+        body.innerHTML = '<div class="detail-loading">加载中...</div>';
+        await loadDetail(t.id);
+      }
+      const d = state.detailCache[t.id];
+      body.innerHTML = d.html || '<p>无内容</p>';
+    } else {
+      detail.style.transform = '';
+      detail.classList.remove('show');
+    }
+  },
+  flag() {
+    const t = state.filtered[state.cursor];
+    if (!t) return;
+    const s = state.scores[t.id] || {};
+    s.flagged = !s.flagged;
+    state.scores[t.id] = s;
+    saveScores();
+    document.getElementById('flagBtn').classList.toggle('active', s.flagged);
+    toast(s.flagged ? '已标记' : '已取消标记');
+  },
+  openScore() {
+    const t = state.filtered[state.cursor];
+    if (!t) return;
+    const cur = state.scores[t.id]?.score;
+    state.pendingScore = cur ?? null;
+    const grid = document.getElementById('scoreGrid');
+    grid.innerHTML = '';
+    for (let i = 0; i <= 10; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'score-cell' + (cur === i ? ' active' : '');
+      cell.textContent = i;
+      cell.onclick = () => {
+        state.pendingScore = i;
+        grid.querySelectorAll('.score-cell').forEach(c => c.classList.remove('active'));
+        cell.classList.add('active');
+      };
+      grid.appendChild(cell);
+    }
+    document.getElementById('scoreOverlay').classList.add('show');
+  },
+  closeScore() {
+    document.getElementById('scoreOverlay').classList.remove('show');
+  },
+  saveScore() {
+    const t = state.filtered[state.cursor];
+    if (!t || state.pendingScore === null) { actions.closeScore(); return; }
+    const s = state.scores[t.id] || {};
+    s.score = state.pendingScore;
+    state.scores[t.id] = s;
+    saveScores();
+    toast('评分: ' + state.pendingScore + ' 分');
+    actions.closeScore();
+  },
+};
+
+function animateExit(dir) {
+  state.isAnimating = true;
+  const el = state.cardEl;
+  if (!el) { state.isAnimating = false; return; }
+  const cls = { right: 'exit-right', left: 'exit-left', up: 'exit-up', down: 'exit-down' }[dir];
+  el.classList.add(cls);
+  setTimeout(() => {
+    state.cursor++;
+    state.isAnimating = false;
+    renderCard();
+  }, 350);
+}
+
+// === 工具 ===
+function stripHtml(s) {
+  const d = document.createElement('div');
+  d.innerHTML = s || '';
+  return (d.textContent || d.innerText || '').replace(/\s+/g, ' ').trim();
+}
+function escapeHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function exportScores() {
+  let out = 'id,title,tags,votes,views,decision,score,flagged,note,at\n';
+  state.topics.forEach(t => {
+    const s = state.scores[t.id];
+    if (!s) return;
+    const title = (t.title || '').replace(/"/g, '""');
+    out += `${t.id},"${title}","${t.tags||''}",${t.votes||0},${t.views||0},${s.decision||''},${s.score||''},${s.flagged?'1':'0'},"${(s.note||'').replace(/"/g,'""')}",${s.at?new Date(s.at).toISOString():''}\n`;
+  });
+  const blob = new Blob(["\ufeff" + out], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'trae_scores_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  toast('已导出 ' + Object.keys(state.scores).length + ' 条评分');
+}
+
+function resetScores() {
+  if (!confirm('确认清空所有评分？此操作不可撤销。')) return;
+  state.scores = {};
+  localStorage.removeItem('trae_scores');
+  state.cursor = 0;
+  renderCard();
+  toast('已清空');
+}
+
+// 键盘
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (document.getElementById('scoreOverlay').classList.contains('show')) {
+    if (e.key === 'Escape') actions.closeScore();
+    return;
+  }
+  const t = state.filtered[state.cursor];
+  if (!t) return;
+  switch(e.key) {
+    case 'ArrowLeft': e.preventDefault(); actions.dislike(); break;
+    case 'ArrowRight': e.preventDefault(); actions.like(); break;
+    case 'ArrowUp': e.preventDefault(); actions.toggleDetail(); break;
+    case 'ArrowDown': case ' ': e.preventDefault(); actions.skip(); break;
+    case 'f': case 'F': actions.flag(); break;
+    case 's': case 'S': actions.openScore(); break;
+  }
+});
+
+// 启动
+loadScores();
+loadTopics().catch(err => {
+  document.getElementById('emptyState').innerHTML =
+    `<div class="emoji">⚠️</div><h2>加载失败</h2><p>${err.message}</p><p style="font-size:11px;margin-top:8px;color:var(--text-mute)">请确保通过 http:// 访问，而非 file://</p>`;
+});
+document.getElementById('filterTag').addEventListener('change', applyFilter);
+document.getElementById('sortBy').addEventListener('change', applyFilter);
+</script>
+</body>
+</html>
